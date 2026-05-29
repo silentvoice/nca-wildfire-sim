@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A playable neural cellular automata wildfire simulator where local cells predict and control fire spread."
+    />
+    <title>NCA Fireline</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="stage" aria-label="Wildfire simulation">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">Neural Cellular Automata</p>
+            <h1>NCA Fireline</h1>
+          </div>
+          <div class="top-actions">
+            <a href="https://github.com/silentvoice/nca-wildfire-sim" aria-label="GitHub repository">GitHub</a>
+            <button id="play" type="button" aria-pressed="true">Pause</button>
+            <button id="reset" type="button">Reset</button>
+          </div>
+        </div>
+
+        <div class="field-wrap">
+          <canvas id="field" aria-label="Wildfire simulation grid"></canvas>
+          <div class="hud" aria-live="polite">
+            <span>t <strong id="tick-value">0</strong></span>
+            <span>burning <strong id="burning-value">0</strong></span>
+            <span>risk <strong id="risk-value">0</strong></span>
+          </div>
+        </div>
+      </section>
+
+      <aside class="controls" aria-label="Simulation controls">
+        <section class="control-block">
+          <div class="block-title">
+            <h2>Brush</h2>
+            <span id="brush-value">5</span>
+          </div>
+          <fieldset class="segmented">
+            <legend class="sr-only">Brush tool</legend>
+            <label>
+              <input id="tool-ignite" name="tool" value="ignite" type="radio" checked />
+              <span>Ignite</span>
+            </label>
+            <label>
+              <input id="tool-water" name="tool" value="water" type="radio" />
+              <span>Water</span>
+            </label>
+            <label>
+              <input id="tool-line" name="tool" value="line" type="radio" />
+              <span>Line</span>
+            </label>
+            <label>
+              <input id="tool-grow" name="tool" value="grow" type="radio" />
+              <span>Fuel</span>
+            </label>
+          </fieldset>
+          <input id="brush" type="range" min="2" max="12" value="5" aria-label="Brush size" aria-describedby="brush-value" />
+        </section>
+
+        <section class="control-block">
+          <div class="block-title">
+            <h2>Cells</h2>
+            <label class="toggle">
+              <input id="auto-control" type="checkbox" aria-label="Enable local cell fireline control" />
+              <span></span>
+            </label>
+          </div>
+          <label class="row">
+            <span>View</span>
+            <select id="view">
+              <option value="beauty">Composite</option>
+              <option value="prediction">Risk</option>
+              <option value="heat">Heat</option>
+              <option value="retardant">Line</option>
+              <option value="fuel">Fuel</option>
+            </select>
+          </label>
+          <label class="row">
+            <span>Crew</span>
+            <input id="crew" type="range" min="0" max="100" value="48" />
+          </label>
+          <div id="cell-readout" class="cell-readout">
+            <span>hover a cell</span>
+          </div>
+        </section>
+
+        <section class="control-block">
+          <div class="block-title">
+            <h2>Weather</h2>
+            <span id="wind-value">-14 deg</span>
+          </div>
+          <label class="row">
+            <span>Wind</span>
+            <input id="wind" type="range" min="-180" max="180" value="-14" />
+          </label>
+          <label class="row">
+            <span>Push</span>
+            <input id="wind-strength" type="range" min="0" max="120" value="72" />
+          </label>
+          <label class="row">
+            <span>Dryness</span>
+            <input id="dryness" type="range" min="0" max="100" value="58" />
+          </label>
+          <label class="row">
+            <span>Spread</span>
+            <input id="spread" type="range" min="20" max="120" value="72" />
+          </label>
+        </section>
+
+        <section class="control-block telemetry">
+          <h2>Field</h2>
+          <dl>
+            <div>
+              <dt>Scorched</dt>
+              <dd id="burned-value">0%</dd>
+            </div>
+            <div>
+              <dt>Fuel</dt>
+              <dd id="fuel-value">0%</dd>
+            </div>
+            <div>
+              <dt>Heat</dt>
+              <dd id="heat-value">0%</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="channel-strip" aria-label="State channels">
+          <figure>
+            <canvas id="fuel-channel"></canvas>
+            <figcaption>fuel</figcaption>
+          </figure>
+          <figure>
+            <canvas id="prediction-channel"></canvas>
+            <figcaption>risk</figcaption>
+          </figure>
+          <figure>
+            <canvas id="retardant-channel"></canvas>
+            <figcaption>line</figcaption>
+          </figure>
+        </section>
+      </aside>
+    </main>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

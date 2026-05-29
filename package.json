@@ -1,0 +1,22 @@
+{
+  "name": "nca-wildfire-sim",
+  "version": "0.1.0",
+  "description": "A tiny browser playground for learning neural cellular automata through wildfire spread and firefighter control.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "lint": "node --check src/sim.js && node --check src/app.js"
+  },
+  "keywords": [
+    "neural-cellular-automata",
+    "cellular-automata",
+    "wildfire",
+    "simulation",
+    "education"
+  ],
+  "author": "Ankur Bohra",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
