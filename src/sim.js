@@ -13,8 +13,8 @@ export const CHANNELS = Object.freeze({
 export const CHANNEL_COUNT = Object.keys(CHANNELS).length;
 
 export const DEFAULT_CONFIG = Object.freeze({
-  width: 116,
-  height: 76,
+  width: 104,
+  height: 68,
   seed: 11,
   windAngle: -0.25,
   windStrength: 0.72,
@@ -33,6 +33,47 @@ const NEIGHBORS = Object.freeze([
   [-1, 1, Math.SQRT1_2],
   [0, 1, 1],
   [1, 1, Math.SQRT1_2],
+]);
+
+export const LOCAL_NETWORK = Object.freeze({
+  inputs: Object.freeze([
+    "bias",
+    "heat",
+    "avgHeat",
+    "windHeat",
+    "heatEdge",
+    "fuel",
+    "dryFuel",
+    "moisture",
+    "burned",
+    "retardant",
+    "avgRetardant",
+    "ember",
+    "hiddenA",
+    "hiddenB",
+  ]),
+  hidden: Object.freeze(["spreadPressure", "fuelReady", "barrier", "memoryPulse", "actionNeed"]),
+  outputs: Object.freeze(["heatDrive", "riskLogit", "lineLogit", "memoryA", "memoryB"]),
+});
+
+const INPUT_COUNT = LOCAL_NETWORK.inputs.length;
+const HIDDEN_COUNT = LOCAL_NETWORK.hidden.length;
+const OUTPUT_COUNT = LOCAL_NETWORK.outputs.length;
+
+const HIDDEN_WEIGHTS = Object.freeze([
+  Object.freeze([-0.34, 1.05, 2.35, 1.24, 1.18, 0.14, 0.95, -1.22, -0.7, -1.45, -0.72, 0.28, 0.56, 0.05]),
+  Object.freeze([-0.72, 0.24, 0.58, 0.16, 0.42, 0.82, 1.26, -0.82, -1.55, -0.34, -0.72, 0.68, 0.08, 0.54]),
+  Object.freeze([-0.08, -0.52, -0.36, -0.3, -0.18, 0.12, -0.2, 1.06, 0.18, 1.62, 0.82, -0.16, -0.34, 0.28]),
+  Object.freeze([-0.12, 0.96, 0.78, 0.56, 0.66, 0.08, 0.22, -0.32, -0.26, -0.34, -0.2, 0.84, 0.74, -0.38]),
+  Object.freeze([-0.58, 0.46, 1.24, 0.82, 0.74, 0.28, 0.86, -0.42, -1.02, -1.12, -0.68, 0.2, 0.34, 0.42]),
+]);
+
+const OUTPUT_WEIGHTS = Object.freeze([
+  Object.freeze([-0.18, 0.94, 0.46, -0.52, 0.28, 0.34, 0.24, 0.18, 0.32, 0.2, 0.08, 0.26, -0.18, -0.18, -0.28, -0.12, 0.16, 0.06, 0.02]),
+  Object.freeze([-0.96, 1.72, 0.96, -0.92, 0.68, 1.28, 0.62, 1.38, 0.86, 0.72, 0.18, 0.82, -0.54, -0.76, -1.12, -0.72, 0.42, 0.34, 0.18]),
+  Object.freeze([-1.35, 0.82, 0.48, -1.12, 0.18, 1.76, 0.16, 1.12, 0.84, 0.78, 0.18, 0.92, -0.26, -0.66, -1.18, -0.72, 0.18, 0.24, 0.3]),
+  Object.freeze([-0.04, 0.64, 0.14, -0.28, 0.72, 0.2, 0.32, 0.48, 0.24, 0.44, 0.08, 0.2, -0.24, -0.18, -0.28, -0.08, 0.54, 0.88, -0.22]),
+  Object.freeze([-0.1, 0.24, 0.72, -0.12, -0.18, 0.62, 0.18, 0.34, 0.18, 0.32, 0.16, 0.46, -0.22, -0.34, -0.38, -0.18, 0.36, -0.18, 0.82]),
 ]);
 
 export function createSimulation(options = {}) {
@@ -208,6 +249,9 @@ function stepOnce(sim) {
   const { width, height, current, next, config } = sim;
   const windX = Math.cos(config.windAngle) * config.windStrength;
   const windY = Math.sin(config.windAngle) * config.windStrength;
+  const networkInput = new Float32Array(INPUT_COUNT);
+  const networkHidden = new Float32Array(HIDDEN_COUNT);
+  const networkOut = new Float32Array(OUTPUT_COUNT);
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -244,39 +288,28 @@ function stepOnce(sim) {
       const dryFuel = localFuel * (1 - moisture * 0.72);
       const edge = Math.max(0, heatMax - heat * 0.35);
 
-      const h0 = Math.tanh(
-        avgHeat * 2.4 +
-          windHeat * 1.25 +
-          edge * 1.1 +
-          hiddenA * 0.62 -
-          moisture * 1.35 -
-          retardant * 1.65 -
-          0.18,
-      );
-      const h1 = Math.tanh(
-        dryFuel * 0.9 +
-          ember * 0.7 +
-          heat * 1.4 +
-          avgHeat * 0.8 +
-          hiddenB * 0.58 -
-          avgRetardant * 1.25 -
-          burned * 1.8 -
-          0.7,
-      );
-      const prediction = sigmoid(
-        h0 * 2.1 +
-          h1 * 1.4 +
-          heat * 1.2 +
-          avgHeat * 2.4 +
-          windHeat * 1.0 -
-          retardant * 1.45 -
-          moisture * 0.8 -
-          0.82,
-      );
+      networkInput[0] = 1;
+      networkInput[1] = heat;
+      networkInput[2] = avgHeat;
+      networkInput[3] = windHeat;
+      networkInput[4] = edge;
+      networkInput[5] = localFuel;
+      networkInput[6] = dryFuel;
+      networkInput[7] = moisture;
+      networkInput[8] = burned;
+      networkInput[9] = retardant;
+      networkInput[10] = avgRetardant;
+      networkInput[11] = ember;
+      networkInput[12] = hiddenA;
+      networkInput[13] = hiddenB;
+      runLocalNetwork(networkInput, networkHidden, networkOut);
+
+      const heatDrive = networkOut[0];
+      const prediction = sigmoid(networkOut[1]);
 
       const localClock = hash2(x, y, sim.seed + sim.tick * 17);
       const asynchronous = localClock > 0.1 ? 1 : 0.22;
-      const ignitionGate = clamp01((avgHeat + windHeat * 0.42 + heat * 0.28 + ember * 0.2 - 0.025) * 3.4);
+      const ignitionGate = clamp01((heatDrive + avgHeat * 0.64 + windHeat * 0.34 + heat * 0.18 - 0.02) * 1.6);
       const ignition = prediction * dryFuel * config.spread * asynchronous * ignitionGate;
       const diffusion = windHeat * 0.014 * localFuel;
       const cooling = 0.06 + moisture * 0.04 + retardant * 0.09 + burned * 0.12 + (1 - localFuel) * 0.1;
@@ -286,7 +319,7 @@ function stepOnce(sim) {
 
       const controlSignal =
         config.autoControl && localFuel > 0.03
-          ? sigmoid((prediction + edge + dryFuel - retardant - 0.86) * 7) * config.firefighter
+          ? sigmoid(networkOut[2] + prediction * 1.35 + edge * 0.8 - 0.54) * config.firefighter
           : 0;
       const newRetardant = clamp01(retardant * 0.997 + controlSignal * 0.05 - newHeat * 0.002);
       const newMoisture = clamp01(moisture + controlSignal * 0.018 - newHeat * (0.002 + config.dryness * 0.003));
@@ -299,14 +332,38 @@ function stepOnce(sim) {
       next[idx + CHANNELS.retardant] = newRetardant;
       next[idx + CHANNELS.ember] = newEmber;
       next[idx + CHANNELS.prediction] = prediction;
-      next[idx + CHANNELS.hiddenA] = clamp(hiddenA * 0.88 + (h0 - hiddenA) * 0.18 + (avgHeat - heat) * 0.08, -1, 1);
-      next[idx + CHANNELS.hiddenB] = clamp(hiddenB * 0.9 + (h1 - hiddenB) * 0.16 + (prediction - 0.5) * 0.04, -1, 1);
+      next[idx + CHANNELS.hiddenA] = clamp(hiddenA * 0.86 + (networkOut[3] - hiddenA) * 0.2 + (avgHeat - heat) * 0.07, -1, 1);
+      next[idx + CHANNELS.hiddenB] = clamp(hiddenB * 0.88 + (networkOut[4] - hiddenB) * 0.18 + (prediction - 0.5) * 0.04, -1, 1);
     }
   }
 
   sim.current = next;
   sim.next = current;
   sim.tick += 1;
+}
+
+function runLocalNetwork(input, hidden, output) {
+  for (let h = 0; h < HIDDEN_COUNT; h += 1) {
+    const weights = HIDDEN_WEIGHTS[h];
+    let sum = 0;
+    for (let i = 0; i < INPUT_COUNT; i += 1) {
+      sum += input[i] * weights[i];
+    }
+    hidden[h] = Math.tanh(sum);
+  }
+
+  for (let o = 0; o < OUTPUT_COUNT; o += 1) {
+    const weights = OUTPUT_WEIGHTS[o];
+    let sum = weights[0];
+    for (let h = 0; h < HIDDEN_COUNT; h += 1) {
+      sum += hidden[h] * weights[h + 1];
+    }
+    const inputOffset = HIDDEN_COUNT + 1;
+    for (let i = 0; i < INPUT_COUNT - 1; i += 1) {
+      sum += input[i + 1] * weights[inputOffset + i];
+    }
+    output[o] = o === 1 || o === 2 ? sum : Math.tanh(sum);
+  }
 }
 
 function emptyStats() {

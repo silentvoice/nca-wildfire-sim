@@ -18,7 +18,7 @@
           <span class="brand-mark" aria-hidden="true"></span>
           <div>
             <h1>NCA Fireline</h1>
-            <p>Paint a fire. Watch local cells predict risk and build a line.</p>
+            <p>Paint a fire. Each cell runs the same tiny network from local evidence.</p>
           </div>
         </div>
         <div class="command-actions" aria-label="Run controls">
@@ -113,7 +113,7 @@
 
           <ol class="local-loop" aria-label="Local NCA loop">
             <li><span>1</span>Observe 3x3 neighbors</li>
-            <li><span>2</span>Mix channels</li>
+            <li><span>2</span>Run tiny network</li>
             <li><span>3</span>Write new state</li>
             <li><span>4</span>Repeat everywhere</li>
           </ol>
@@ -156,13 +156,31 @@
           <section class="rail-section">
             <div class="section-head">
               <div>
-                <h2>Cell rule</h2>
-                <p>Let risk become action.</p>
+                <h2>Neural cell</h2>
+                <p>Turn local risk into local action.</p>
               </div>
               <label class="switch">
                 <input id="auto-control" type="checkbox" aria-label="Enable local cell fireline control" />
                 <span></span>
               </label>
+            </div>
+            <div class="network-card" aria-label="Tiny local neural network diagram">
+              <div class="kernel-grid" aria-hidden="true">
+                <span></span><span></span><span></span>
+                <span></span><span></span><span></span>
+                <span></span><span></span><span></span>
+              </div>
+              <div class="network-core" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="network-outs">
+                <span>heat</span>
+                <span>risk</span>
+                <span>line</span>
+                <span>memory</span>
+              </div>
             </div>
             <label class="control-row">
               <span>Crew strength</span>

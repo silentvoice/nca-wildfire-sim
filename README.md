@@ -1,36 +1,37 @@
 # NCA Fireline
 
-NCA Fireline is a small browser simulator for learning neural cellular
-automata by playing with fire spread.
+A small browser playground for neural cellular automata.
 
 Open it here:
 
 https://silentvoice.github.io/nca-wildfire-sim/
 
-The whole thing is plain HTML, CSS, and JavaScript. There is no build step and
-no dependency tree. I wanted the code to stay close enough to the idea that you
-can read it in one sitting, change a few numbers, refresh the page, and see the
-rule behave differently.
+The simulation is a grid of cells. Each cell stores a short vector: fuel, heat,
+moisture, burned ground, retardant, ember, prediction, and two hidden memory
+channels. On every tick, each cell reads its 3x3 neighborhood, runs the same
+tiny neural network, and writes its next state.
 
-## What To Try
+The weights are hand-initialized so the code stays readable. That means this is
+not a trained wildfire model. It is a learning project for the NCA mechanism:
+local observations, shared weights, repeated updates, visible prediction, and
+local control.
 
-1. Let the default fire run for a few seconds.
-2. Switch the view to `Risk` and watch the yellow field appear ahead of the
-   flame.
-3. Turn on `Cell rule`. High-risk cells will start laying cyan fireline.
+## Try This
+
+1. Press `Play`.
+2. Switch to `Risk`; yellow appears before the fire reaches those cells.
+3. Turn on `Neural cell`; high-risk cells start laying cyan fireline.
 4. Paint with `Ignite`, `Water`, `Line`, and `Fuel`.
-5. Change wind and dryness, then hit `Reset` for a new terrain seed.
-6. Hover the field to inspect one cell's local state vector.
+5. Change wind or dryness, then `Reset`.
+6. Hover the field to inspect one cell's state vector.
 
-The fun part is that no cell sees the whole map. Each cell reads a 3x3
-neighborhood, runs the same small update rule, and writes its next state. Fire,
-risk, and fireline only look global because that local rule runs everywhere,
-over and over.
+No cell sees the full map. The global-looking behavior comes from the same
+local network running everywhere, again and again.
 
 ## Run Locally
 
 Serve the folder with any static server. Native ES modules need `http://` or
-`https://`, so opening `index.html` directly is not enough.
+`https://`; opening `index.html` directly is not enough.
 
 ```bash
 python3 -m http.server 4173
@@ -42,37 +43,19 @@ Then open:
 http://localhost:4173
 ```
 
-## Read The Code
+## Code Tour
 
-Start with [`src/sim.js`](src/sim.js). That file has the entire simulation:
+Start with [`src/sim.js`](src/sim.js).
 
-- `CHANNELS` names the numbers stored in each cell.
+- `CHANNELS` names the values stored in each cell.
+- `LOCAL_NETWORK` names the network inputs, hidden units, and outputs.
 - `createSimulation()` allocates the grid and seeds terrain.
-- `paintCells()` is how the brush tools change local channels.
-- `stepOnce()` is the shared cell rule.
+- `paintCells()` applies the brush tools.
+- `stepOnce()` runs the shared local update rule.
 - `measure()` produces the HUD numbers.
 
-The browser work lives in [`src/app.js`](src/app.js): drawing pixels, wiring
-controls, reading hover state, and keeping the canvases sized.
-
-## Cell Channels
-
-Each cell stores a short vector:
-
-| Channel | Meaning |
-| --- | --- |
-| `fuel` | Burnable material left in the cell. |
-| `heat` | Current local fire intensity. |
-| `moisture` | Resistance to ignition. |
-| `burned` | How much of this cell has already burned. |
-| `retardant` | Fireline or water/retardant protection. |
-| `ember` | Short-lived heat memory. |
-| `prediction` | Local risk estimate. |
-| `hiddenA`, `hiddenB` | Private scratchpad memory carried between ticks. |
-
-This version is hand-tuned instead of trained. That is intentional: the update
-rule is readable, so the project works as a stepping stone before training an
-NCA with gradient descent.
+The browser shell is in [`src/app.js`](src/app.js): canvas drawing, controls,
+hover inspection, and the event-driven render loop.
 
 ## Tests
 
@@ -81,8 +64,8 @@ npm test
 npm run lint
 ```
 
-The tests focus on the simulation core: deterministic terrain, deterministic
-replay, spread, brush effects, reset/config behavior, and channel bounds.
+The tests cover deterministic terrain, deterministic replay, fire spread,
+brush effects, reset/config behavior, and channel bounds.
 
 ## License
 

@@ -52,6 +52,7 @@ const labels = {
 };
 
 const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+const STEP_MS = 42;
 
 const state = {
   sim: createSimulation(),
@@ -61,25 +62,42 @@ const state = {
   readoutMode: null,
   lastTime: performance.now(),
   accumulator: 0,
+  frameRequest: 0,
+  renderQueued: false,
+  channelsDirty: true,
 };
 
 syncGridGeometry();
 
 wireControls();
 resizeCanvas();
-requestAnimationFrame(frame);
+requestRender({ channels: true });
 
 function wireControls() {
   syncPlayButton();
   controls.play.addEventListener("click", () => {
+    if (reducedMotionQuery.matches) {
+      state.paused = true;
+      syncPlayButton();
+      requestRender();
+      return;
+    }
     state.paused = !state.paused;
+    state.accumulator = 0;
+    state.lastTime = performance.now();
     syncPlayButton();
+    if (state.paused) {
+      requestRender();
+    } else {
+      startAnimation();
+    }
   });
   controls.step.addEventListener("click", () => {
     state.paused = true;
     state.accumulator = 0;
     step(state.sim, 1);
     syncPlayButton();
+    requestRender({ channels: true });
   });
 
   controls.reset.addEventListener("click", () => {
@@ -88,6 +106,7 @@ function wireControls() {
     resetCellReadout();
     syncGridGeometry();
     resizeCanvas();
+    requestRender({ channels: true });
   });
 
   for (const input of [
@@ -100,6 +119,9 @@ function wireControls() {
   ]) {
     input.addEventListener("input", updateConfigFromControls);
   }
+  for (const input of controls.viewInputs) {
+    input.addEventListener("input", () => requestRender());
+  }
   controls.brush.addEventListener("input", () => {
     labels.brush.textContent = controls.brush.value;
   });
@@ -107,15 +129,26 @@ function wireControls() {
     if (reducedMotionQuery.matches) {
       state.paused = true;
       syncPlayButton();
+      requestRender();
+    } else if (!state.paused) {
+      startAnimation();
     }
   });
   updateConfigFromControls();
   resetCellReadout();
 
-  window.addEventListener("resize", resizeCanvas);
+  window.addEventListener("resize", () => {
+    resizeCanvas();
+    requestRender({ channels: true });
+  });
   document.addEventListener("visibilitychange", () => {
     state.lastTime = performance.now();
     state.accumulator = 0;
+    if (!document.hidden && !state.paused) {
+      startAnimation();
+    } else {
+      requestRender();
+    }
   });
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("pointermove", onPointerMove);
@@ -123,6 +156,7 @@ function wireControls() {
     state.pointer = null;
     state.hover = null;
     resetCellReadout();
+    requestRender();
   });
   window.addEventListener("pointerup", () => {
     state.pointer = null;
@@ -147,6 +181,7 @@ function updateConfigFromControls() {
   labels.dryness.textContent = `${dryness}%`;
   labels.spread.textContent = `${spread}%`;
   labels.crew.textContent = `${crew}%`;
+  requestRender();
 }
 
 function onPointerDown(event) {
@@ -161,12 +196,15 @@ function onPointerMove(event) {
   if (state.pointer) {
     state.pointer = point;
     paintAtPointer(point);
+  } else {
+    requestRender();
   }
 }
 
 function paintAtPointer(point) {
   paintCells(state.sim, point.x, point.y, Number(controls.brush.value), selectedTool(), 1);
   state.sim.stats = measure(state.sim);
+  requestRender({ channels: true });
 }
 
 function pointerToCell(event) {
@@ -177,21 +215,42 @@ function pointerToCell(event) {
   };
 }
 
+function startAnimation() {
+  if (state.frameRequest || reducedMotionQuery.matches || document.hidden) return;
+  state.frameRequest = requestAnimationFrame(frame);
+}
+
 function frame(time) {
+  state.frameRequest = 0;
   const delta = Math.min(80, time - state.lastTime);
   state.lastTime = time;
   state.accumulator += delta;
 
   if (!state.paused && !document.hidden) {
-    while (state.accumulator > 30) {
+    while (state.accumulator > STEP_MS) {
       step(state.sim, 1);
-      state.accumulator -= 30;
+      state.accumulator -= STEP_MS;
+      state.channelsDirty = true;
     }
   }
 
   draw();
   updateReadouts();
-  requestAnimationFrame(frame);
+  if (!state.paused && !document.hidden) {
+    state.frameRequest = requestAnimationFrame(frame);
+  }
+}
+
+function requestRender(options = {}) {
+  if (options.channels) state.channelsDirty = true;
+  if (!state.paused && state.frameRequest) return;
+  if (state.renderQueued) return;
+  state.renderQueued = true;
+  requestAnimationFrame(() => {
+    state.renderQueued = false;
+    draw();
+    updateReadouts();
+  });
 }
 
 function syncPlayButton() {
@@ -234,9 +293,12 @@ function resizeCanvas() {
 
 function draw() {
   drawMainField();
-  drawMiniChannel(channels.fuel, CHANNELS.fuel, "fuel");
-  drawMiniChannel(channels.prediction, CHANNELS.prediction, "prediction");
-  drawMiniChannel(channels.retardant, CHANNELS.retardant, "retardant");
+  if (state.channelsDirty) {
+    drawMiniChannel(channels.fuel, CHANNELS.fuel, "fuel");
+    drawMiniChannel(channels.prediction, CHANNELS.prediction, "prediction");
+    drawMiniChannel(channels.retardant, CHANNELS.retardant, "retardant");
+    state.channelsDirty = false;
+  }
 }
 
 function drawMainField() {
