@@ -22,10 +22,11 @@ const channels = {
 
 const controls = {
   play: document.querySelector("#play"),
+  step: document.querySelector("#step"),
   reset: document.querySelector("#reset"),
   auto: document.querySelector("#auto-control"),
   toolInputs: [...document.querySelectorAll("input[name='tool']")],
-  view: document.querySelector("#view"),
+  viewInputs: [...document.querySelectorAll("input[name='view']")],
   wind: document.querySelector("#wind"),
   windStrength: document.querySelector("#wind-strength"),
   dryness: document.querySelector("#dryness"),
@@ -42,6 +43,10 @@ const labels = {
   fuel: document.querySelector("#fuel-value"),
   heat: document.querySelector("#heat-value"),
   wind: document.querySelector("#wind-value"),
+  push: document.querySelector("#push-value"),
+  dryness: document.querySelector("#dryness-value"),
+  spread: document.querySelector("#spread-value"),
+  crew: document.querySelector("#crew-value"),
   brush: document.querySelector("#brush-value"),
   cell: document.querySelector("#cell-readout"),
 };
@@ -50,9 +55,10 @@ const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)")
 
 const state = {
   sim: createSimulation(),
-  paused: reducedMotionQuery.matches,
+  paused: true,
   pointer: null,
   hover: null,
+  readoutMode: null,
   lastTime: performance.now(),
   accumulator: 0,
 };
@@ -69,12 +75,19 @@ function wireControls() {
     state.paused = !state.paused;
     syncPlayButton();
   });
+  controls.step.addEventListener("click", () => {
+    state.paused = true;
+    state.accumulator = 0;
+    step(state.sim, 1);
+    syncPlayButton();
+  });
 
   controls.reset.addEventListener("click", () => {
     resetSimulation(state.sim, { seed: state.sim.seed + 1 });
     state.hover = null;
     resetCellReadout();
     syncGridGeometry();
+    resizeCanvas();
   });
 
   for (const input of [
@@ -97,6 +110,7 @@ function wireControls() {
     }
   });
   updateConfigFromControls();
+  resetCellReadout();
 
   window.addEventListener("resize", resizeCanvas);
   document.addEventListener("visibilitychange", () => {
@@ -116,15 +130,23 @@ function wireControls() {
 }
 
 function updateConfigFromControls() {
+  const windStrength = Number(controls.windStrength.value);
+  const dryness = Number(controls.dryness.value);
+  const spread = Number(controls.spread.value);
+  const crew = Number(controls.crew.value);
   setConfig(state.sim, {
     autoControl: controls.auto.checked,
     windAngle: (Number(controls.wind.value) / 180) * Math.PI,
-    windStrength: Number(controls.windStrength.value) / 100,
-    dryness: Number(controls.dryness.value) / 100,
-    spread: Number(controls.spread.value) / 100,
-    firefighter: Number(controls.crew.value) / 100,
+    windStrength: windStrength / 100,
+    dryness: dryness / 100,
+    spread: spread / 100,
+    firefighter: crew / 100,
   });
   labels.wind.textContent = `${controls.wind.value} deg`;
+  labels.push.textContent = `${windStrength}%`;
+  labels.dryness.textContent = `${dryness}%`;
+  labels.spread.textContent = `${spread}%`;
+  labels.crew.textContent = `${crew}%`;
 }
 
 function onPointerDown(event) {
@@ -188,6 +210,22 @@ function syncGridGeometry() {
 }
 
 function resizeCanvas() {
+  const wrap = canvas.parentElement;
+  const wrapRect = wrap.getBoundingClientRect();
+  const wrapStyle = getComputedStyle(wrap);
+  const availableWidth =
+    wrapRect.width - parseFloat(wrapStyle.paddingLeft) - parseFloat(wrapStyle.paddingRight);
+  const availableHeight =
+    wrapRect.height - parseFloat(wrapStyle.paddingTop) - parseFloat(wrapStyle.paddingBottom);
+  const ratio = state.sim.width / state.sim.height;
+  let cssWidth = Math.max(1, availableWidth);
+  let cssHeight = cssWidth / ratio;
+  if (cssHeight > availableHeight) {
+    cssHeight = Math.max(1, availableHeight);
+    cssWidth = cssHeight * ratio;
+  }
+  canvas.style.width = `${Math.floor(cssWidth)}px`;
+  canvas.style.height = `${Math.floor(cssHeight)}px`;
   const rect = canvas.getBoundingClientRect();
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.max(1, Math.floor(rect.width * pixelRatio));
@@ -204,7 +242,7 @@ function draw() {
 function drawMainField() {
   const { sim } = state;
   const image = bufferCtx.createImageData(sim.width, sim.height);
-  const mode = controls.view.value;
+  const mode = selectedView();
 
   for (let y = 0; y < sim.height; y += 1) {
     for (let x = 0; x < sim.width; x += 1) {
@@ -228,7 +266,7 @@ function drawMainField() {
     const scaleY = canvas.height / sim.height;
     const x = Math.floor(state.hover.x);
     const y = Math.floor(state.hover.y);
-    ctx.strokeStyle = "rgba(246, 244, 218, 0.86)";
+    ctx.strokeStyle = "rgba(244, 240, 223, 0.92)";
     ctx.lineWidth = 2;
     ctx.strokeRect((x - 1) * scaleX, (y - 1) * scaleY, 3 * scaleX, 3 * scaleY);
   }
@@ -295,11 +333,12 @@ function updateReadouts() {
   if (state.hover) {
     const cell = readCell(state.sim, state.hover.x, state.hover.y);
     setCellReadout([
-      `${cell.x},${cell.y}`,
-      `fuel ${percent(cell.fuel)}`,
-      `heat ${percent(cell.heat)}`,
-      `risk ${percent(cell.prediction)}`,
-      `line ${percent(cell.retardant)}`,
+      { label: "cell", value: `${cell.x}, ${cell.y}` },
+      { label: "fuel", value: percent(cell.fuel), level: cell.fuel, color: "#7fb86a" },
+      { label: "heat", value: percent(cell.heat), level: cell.heat, color: "#ff6538" },
+      { label: "risk", value: percent(cell.prediction), level: cell.prediction, color: "#f3d35b" },
+      { label: "line", value: percent(cell.retardant), level: cell.retardant, color: "#52e6d0" },
+      { label: "hidden A", value: cell.hiddenA.toFixed(2), level: (cell.hiddenA + 1) / 2, color: "#9a7cff" },
     ]);
   } else {
     resetCellReadout();
@@ -307,13 +346,27 @@ function updateReadouts() {
 }
 
 function resetCellReadout() {
-  setCellReadout(["hover a cell"]);
+  if (state.readoutMode === "empty") return;
+  state.readoutMode = "empty";
+  labels.cell.replaceChildren(element("p", "empty-readout", "Move over the field to inspect the state vector of one local cell."));
 }
 
 function setCellReadout(values) {
+  state.readoutMode = "cell";
   labels.cell.replaceChildren(...values.map((value) => {
-    const item = document.createElement("span");
-    item.textContent = value;
+    if (typeof value === "string") {
+      return element("p", "empty-readout", value);
+    }
+    const item = element("div", "cell-stat");
+    const name = element("span", "", value.label);
+    const number = element("strong", "", value.value);
+    item.append(name, number);
+    if (typeof value.level === "number") {
+      const bar = document.createElement("i");
+      bar.style.setProperty("--level", String(clamp01(value.level)));
+      bar.style.setProperty("--bar", value.color);
+      item.append(bar);
+    }
     return item;
   }));
 }
@@ -321,7 +374,7 @@ function setCellReadout(values) {
 function drawWindArrow() {
   const angle = state.sim.config.windAngle;
   const strength = state.sim.config.windStrength;
-  const centerX = canvas.width - 62;
+  const centerX = canvas.width - 88;
   const centerY = 54;
   const length = 22 + strength * 28;
   const tipX = centerX + Math.cos(angle) * length;
@@ -392,8 +445,19 @@ function percent(value) {
   return `${Math.round(value * 100)}%`;
 }
 
+function element(tag, className, text) {
+  const item = document.createElement(tag);
+  if (className) item.className = className;
+  item.textContent = text;
+  return item;
+}
+
 function clamp01(value) {
   return Math.min(1, Math.max(0, value));
+}
+
+function selectedView() {
+  return controls.viewInputs.find((input) => input.checked)?.value ?? "beauty";
 }
 
 function selectedTool() {
